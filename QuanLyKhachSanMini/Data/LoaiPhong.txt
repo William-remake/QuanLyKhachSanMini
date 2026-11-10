@@ -1,0 +1,4 @@
+﻿STD;Phòng Standard;450000
+SUP;Phòng Superior;500000
+DLX;Phòng Deluxe;650000
+VIP;Phòng VIP;950000

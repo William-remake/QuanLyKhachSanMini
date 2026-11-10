@@ -1,0 +1,10 @@
+﻿101|Phòng Standard|1|Trống
+102|Phòng Deluxe  |1|Có khách
+103|Phòng Standard|1|Đang dọn
+104|Phòng Deluxe  |1|Đang dọn
+201|Phòng Standard|2|Trống
+202|Phòng Deluxe  |2|Trống
+203|Phòng VIP     |2|Có khách
+301|Phòng Standard|3|Trống
+302|Phòng VIP     |3|Trống
+303|Phòng Deluxe|3|Đang dọn
