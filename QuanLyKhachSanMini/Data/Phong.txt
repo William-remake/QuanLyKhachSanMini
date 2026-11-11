@@ -7,4 +7,4 @@
 203|Phòng VIP     |2|Có khách
 301|Phòng Standard|3|Trống
 302|Phòng VIP     |3|Trống
-303|Phòng Deluxe|3|Đang dọn
+303|Phòng Deluxe  |3|Đang dọn
