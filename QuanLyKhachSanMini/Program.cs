@@ -1,3 +1,5 @@
+using QuanLyKhachSanMini.Forms;
+
 namespace QuanLyKhachSanMini
 {
     internal static class Program
@@ -11,7 +13,7 @@ namespace QuanLyKhachSanMini
             // To customize application configuration such as set high DPI settings or default font,
             // see https://aka.ms/applicationconfiguration.
             ApplicationConfiguration.Initialize();
-            Application.Run(new frmRoomMain());
+            Application.Run(new DatPhongForm());
         }
     }
 }

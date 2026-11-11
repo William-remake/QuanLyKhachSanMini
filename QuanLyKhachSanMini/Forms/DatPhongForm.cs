@@ -16,6 +16,7 @@ namespace QuanLyKhachSanMini.Forms
         private List<DatPhong> dsDat = new();
         private List<KhachHang> dsKhach = new();
         private string soPhongChon = "";
+        private string filePath = "Data\\Phong.txt";
 
         public DatPhongForm()
         {
@@ -118,6 +119,38 @@ namespace QuanLyKhachSanMini.Forms
         {
             soPhongChon = soPhong;
             lblPhongChon.Text = soPhong == "" ? "Chưa chọn phòng" : $"Phòng đã chọn: {soPhong}";
+        }
+
+        // Hàm hỗ trợ cập nhật trạng thái phòng trong file Phong.txt khi có thay đổi (Nhận phòng, Trả phòng, Hủy...)
+        private void CapNhatTrangThaiPhongTrongFile(string soPhongCanSua, string trangThaiMoi)
+        {
+            if (!File.Exists(filePath)) return;
+
+            string[] lines = File.ReadAllLines(filePath);
+            List<string> updatedLines = new List<string>();
+
+            foreach (string line in lines)
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                string[] parts = line.Split('|');
+                if (parts.Length >= 4)
+                {
+                    string soPhong = parts[0].Trim();
+                    string loaiPhong = parts[1].Trim();
+                    string tang = parts[2].Trim();
+                    string trangThai = parts[3].Trim();
+
+                    // Nếu đúng số phòng cần đổi trạng thái
+                    if (soPhong == soPhongCanSua)
+                    {
+                        trangThai = trangThaiMoi; // Cập nhật trạng thái mới (VD: "Có khách", "Trống"...)
+                    }
+
+                    updatedLines.Add($"{soPhong}|{loaiPhong}|{tang}|{trangThai}");
+                }
+            }
+
+            File.WriteAllLines(filePath, updatedLines);
         }
 
         // ---------- Kiểm tra trùng lịch ----------
@@ -270,9 +303,12 @@ namespace QuanLyKhachSanMini.Forms
             d.TrangThai = "DaNhan";
             DuLieu.GhiDatPhong(dsDat);
             TaiDatPhong();
+
+            //BỔ SUNG ĐOẠN NÀY ĐỂ ĐỔI TRẠNG THÁI PHÒNG THÀNH "Có khách" TRONG Phong.txt
+            CapNhatTrangThaiPhongTrongFile(d.SoPhong, "Có khách");
+
             MessageBox.Show("Nhận phòng thành công.", "Thông báo",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
-            // TODO: báo SV1 để đổi trạng thái phòng thành "Có khách" trong Phong.txt
         }
 
         private void BtnHuyDat_Click(object? sender, EventArgs e)
@@ -293,6 +329,9 @@ namespace QuanLyKhachSanMini.Forms
             d.TrangThai = "DaHuy";
             DuLieu.GhiDatPhong(dsDat);
             TaiDatPhong();
+
+            //Khi hủy đặt phòng, chuyển trạng thái phòng trong Phong.txt về lại "Trống"
+            CapNhatTrangThaiPhongTrongFile(d.SoPhong, "Trống");
         }
 
         private void BtnLamMoi_Click(object? sender, EventArgs e)
@@ -312,7 +351,12 @@ namespace QuanLyKhachSanMini.Forms
         {
 
         }
-         private void label1_Click(object sender, EventArgs e)
+        private void label1_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void btnNhanPhong_Click_1(object sender, EventArgs e)
         {
 
         }
