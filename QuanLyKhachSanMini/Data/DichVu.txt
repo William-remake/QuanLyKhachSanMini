@@ -1,0 +1,5 @@
+﻿DV001|Giặt ủi            |Kg   |50000|1
+DV002|Minibar - Nước suối|Chai |15000|1
+DV003|Minibar - Nước ngọt|Lon  |20000|1
+DV004|Minibar - Snack    |Gói  |25000|1
+DV005|Ăn sáng            |Suất |80000|1
