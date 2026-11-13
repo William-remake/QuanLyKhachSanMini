@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Globalization;
 
 namespace QuanLyKhachSanMini.Models
 {
@@ -14,20 +10,29 @@ namespace QuanLyKhachSanMini.Models
         public decimal DonGia { get; set; }
         public bool DangApDung { get; set; } = true;
 
-        // Định dạng 1 dòng trong file: MaDV|TenDV|DonVi|DonGia|DangApDung
-        public string ToLine() => $"{MaDV}|{TenDV}|{DonVi}|{DonGia}|{(DangApDung ? 1 : 0)}";
+        // MaDV|TenDV|DonVi|DonGia|DangApDung
+        public string ToLine() => string.Join("|", LamSach(MaDV), LamSach(TenDV), LamSach(DonVi),
+            DonGia.ToString(CultureInfo.InvariantCulture), DangApDung ? "1" : "0");
+
+        private static string LamSach(string? value) => (value ?? "").Trim()
+            .Replace("|", "/").Replace("\r", " ").Replace("\n", " ");
 
         public static DichVu? FromLine(string line)
         {
             var p = line.Split('|');
             if (p.Length < 5) return null;
+            string giaText = p[3].Trim();
+            decimal gia;
+            bool parsed;
+            if (giaText.Contains(',') && !giaText.Contains('.'))
+                parsed = decimal.TryParse(giaText, NumberStyles.Number, CultureInfo.CurrentCulture, out gia);
+            else
+                parsed = decimal.TryParse(giaText, NumberStyles.Number, CultureInfo.InvariantCulture, out gia);
+            if (!parsed && !decimal.TryParse(giaText, NumberStyles.Number, CultureInfo.CurrentCulture, out gia)) return null;
             return new DichVu
             {
-                MaDV = p[0],
-                TenDV = p[1],
-                DonVi = p[2],
-                DonGia = decimal.TryParse(p[3], out var g) ? g : 0,
-                DangApDung = p[4] == "1"
+                MaDV = p[0].Trim(), TenDV = p[1].Trim(), DonVi = p[2].Trim(),
+                DonGia = gia, DangApDung = p[4].Trim() == "1"
             };
         }
     }

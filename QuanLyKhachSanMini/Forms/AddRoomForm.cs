@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using QuanLyKhachSanMini.Models;
 
 namespace QuanLyKhachSanMini.Forms
 {
@@ -23,12 +24,8 @@ namespace QuanLyKhachSanMini.Forms
             get
             {
                 string selected = cboLoaiPhong.SelectedItem?.ToString() ?? "";
-                if (selected.Contains("-"))
-                {
-                    // Cắt chuỗi lấy phần sau dấu gạch ngang (VD: "STD - Phòng Standard" -> "Phòng Standard")
-                    return selected.Split('-')[1].Trim();
-                }
-                return selected.Trim();
+                int separator = selected.IndexOf(" - ", StringComparison.Ordinal);
+                return separator >= 0 ? selected[(separator + 3)..].Trim() : selected.Trim();
             }
         }
 
@@ -44,31 +41,37 @@ namespace QuanLyKhachSanMini.Forms
 
         private void frmThemPhong_Load(object sender, EventArgs e)
         {
-            // 1. Đưa dữ liệu mẫu vào ComboBox Loại phòng
-            cboLoaiPhong.Items.Add("STD - Phòng Standard");
-            cboLoaiPhong.Items.Add("SUP - Phòng Superior");
-            cboLoaiPhong.Items.Add("VIP - Phòng VIP");
-            cboLoaiPhong.Items.Add("DLX - Phòng Deluxe");
-            cboLoaiPhong.SelectedIndex = 0; // Chọn mặc định mục đầu tiên
+            cboLoaiPhong.Items.Clear();
+            foreach (var loai in DuLieu.DocLoaiPhong())
+                cboLoaiPhong.Items.Add($"{loai.MaLoai} - {loai.TenLoai}");
+            if (cboLoaiPhong.Items.Count > 0) cboLoaiPhong.SelectedIndex = 0;
 
-            // 2. Đưa dữ liệu mẫu vào ComboBox Trạng thái
+            cboTrangThai.Items.Clear();
             cboTrangThai.Items.Add("Trống");
-            cboTrangThai.Items.Add("Có Khách");
-            cboTrangThai.Items.Add("Đang Dọn");
-            cboTrangThai.SelectedIndex = 0;
+            cboTrangThai.Items.Add("Có khách");
+            cboTrangThai.Items.Add("Đang dọn");
+            cboTrangThai.SelectedItem = "Trống";
         }
 
         private void btnLuu_Click(object sender, EventArgs e)
         {
             // Kiểm tra nếu chưa nhập số phòng
-            if (string.IsNullOrWhiteSpace(txtSoPhong.Text))
+            if (string.IsNullOrWhiteSpace(txtSoPhong.Text)
+                || txtSoPhong.Text.Contains('|') || txtSoPhong.Text.Contains('\r') || txtSoPhong.Text.Contains('\n'))
             {
-                MessageBox.Show("Vui lòng nhập số phòng!", "Cảnh báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Vui lòng nhập số phòng hợp lệ, không chứa ký tự | hoặc xuống dòng.", "Cảnh báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 txtSoPhong.Focus();
                 return;
             }
 
-            //Phải có dòng này để form chính biết là đã bấm Lưu thành công
+            if (cboLoaiPhong.SelectedItem == null)
+            {
+                MessageBox.Show("Chưa có loại phòng. Vui lòng tạo loại phòng trước.", "Thiếu dữ liệu",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // Phải có dòng này để form chính biết là đã bấm Lưu thành công.
             this.DialogResult = DialogResult.OK;
             this.Close();
         }

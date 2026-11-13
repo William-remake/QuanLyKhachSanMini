@@ -95,8 +95,16 @@ namespace QuanLyKhachSanMini.Forms
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
-            _ketQua = _sv.TinhTien(luot, dtpThoiDiemTra.Value);
-            txtChiTiet.Text = _sv.TaoNoiDung(_ketQua);
+            try
+            {
+                _ketQua = _sv.TinhTien(luot, dtpThoiDiemTra.Value);
+                txtChiTiet.Text = _sv.TaoNoiDung(_ketQua);
+            }
+            catch (Exception ex)
+            {
+                _ketQua = null;
+                MessageBox.Show(ex.Message, "Không thể tính tiền", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private void btnTraPhong_Click(object sender, EventArgs e)
@@ -109,39 +117,58 @@ namespace QuanLyKhachSanMini.Forms
                 return;
             }
 
-            // luôn tính lại để khớp lựa chọn + thời điểm trả hiện tại
-            _ketQua = _sv.TinhTien(luot, dtpThoiDiemTra.Value);
-            txtChiTiet.Text = _sv.TaoNoiDung(_ketQua);
-
-            var xacNhan = MessageBox.Show(
-                $"Trả phòng {luot.MaPhong} cho {luot.TenKhach}?\nTổng thanh toán: {_ketQua.Tong:N0} đ",
-                "Xác nhận trả phòng", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-            if (xacNhan != DialogResult.Yes) return;
-
-            var hd = _sv.TraPhong(_ketQua);
-            string noiDung = _sv.TaoNoiDung(_ketQua, hd.MaHD);
-            txtChiTiet.Text = noiDung;
-
-            using var dlg = new SaveFileDialog
+            try
             {
-                Filter = "Text file (*.txt)|*.txt",
-                FileName = $"{hd.MaHD}.txt",
-                Title = "Xuất hóa đơn TXT"
-            };
-            if (dlg.ShowDialog() == DialogResult.OK)
-            {
-                File.WriteAllText(dlg.FileName, noiDung, System.Text.Encoding.UTF8);
-                MessageBox.Show("Đã trả phòng và xuất hóa đơn.", "Thành công",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                // Luôn tính lại ngay trước khi lưu để lấy giá phòng và dịch vụ mới nhất.
+                _ketQua = _sv.TinhTien(luot, dtpThoiDiemTra.Value);
+                string noiDungTam = _sv.TaoNoiDung(_ketQua);
+                txtChiTiet.Text = noiDungTam;
+
+                var xacNhan = MessageBox.Show(
+                    $"Trả phòng {luot.MaPhong} cho {luot.TenKhach}?\nTổng thanh toán: {_ketQua.Tong:N0} đ",
+                    "Xác nhận trả phòng", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (xacNhan != DialogResult.Yes) return;
+
+                var hd = _sv.TraPhong(_ketQua);
+                string noiDung = _sv.TaoNoiDung(hd);
+                txtChiTiet.Text = noiDung;
+
+                string fileMacDinh = Path.Combine(DuLieu.ThuMucData, "HoaDon", hd.MaHD + ".txt");
+                using var dlg = new SaveFileDialog
+                {
+                    Filter = "Text file (*.txt)|*.txt",
+                    FileName = $"{hd.MaHD}.txt",
+                    Title = "Xuất hóa đơn TXT",
+                    InitialDirectory = Path.GetDirectoryName(fileMacDinh)
+                };
+                string thongBao = $"Đã trả phòng. Hóa đơn đã được lưu tại: {fileMacDinh}";
+                if (dlg.ShowDialog() == DialogResult.OK)
+                {
+                    try
+                    {
+                        string fileChon = Path.GetFullPath(dlg.FileName);
+                        if (!fileChon.Equals(Path.GetFullPath(fileMacDinh), StringComparison.OrdinalIgnoreCase))
+                            File.WriteAllText(fileChon, noiDung, new UTF8Encoding(false));
+                        thongBao = $"Đã trả phòng và xuất hóa đơn: {fileChon}";
+                    }
+                    catch (Exception exXuat)
+                    {
+                        // Trả phòng và hóa đơn gốc đã được lưu; lỗi bản sao không được báo nhầm là lỗi trả phòng.
+                        MessageBox.Show($"Đã trả phòng và lưu hóa đơn gốc tại {fileMacDinh}, nhưng không thể xuất bản sao.\n{exXuat.Message}",
+                            "Không thể xuất bản sao", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                }
+
+                MessageBox.Show(thongBao, "Thành công", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                TaiDanhSachDangO();
+                XemThongKe();
             }
-            else
+            catch (Exception ex)
             {
-                MessageBox.Show($"Đã trả phòng. Hóa đơn {hd.MaHD} đã được lưu (chưa xuất file TXT).",
-                    "Thành công", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(ex.Message, "Không thể trả phòng", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TaiDanhSachDangO();
+                XemThongKe();
             }
-
-            TaiDanhSachDangO();
-            XemThongKe();
         }
 
         private void btnXemThongKe_Click(object sender, EventArgs e) => XemThongKe();

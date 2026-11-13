@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using QuanLyKhachSanMini.Models;
 
 namespace QuanLyKhachSanMini.Forms
 {
@@ -23,11 +24,8 @@ namespace QuanLyKhachSanMini.Forms
             get
             {
                 string selected = cboLoaiPhong.SelectedItem?.ToString() ?? "";
-                if (selected.Contains("-"))
-                {
-                    return selected.Split('-')[1].Trim();
-                }
-                return selected.Trim();
+                int separator = selected.IndexOf(" - ", StringComparison.Ordinal);
+                return separator >= 0 ? selected[(separator + 3)..].Trim() : selected.Trim();
             }
         }
 
@@ -43,38 +41,40 @@ namespace QuanLyKhachSanMini.Forms
                 numTang.Value = t;
             }
 
-            // 2. Nạp dữ liệu mẫu cho ComboBox Loại phòng
-            cboLoaiPhong.Items.Add("STD - Phòng Standard");
-            cboLoaiPhong.Items.Add("DLX - Phòng Deluxe");
-            cboLoaiPhong.Items.Add("VIP - Phòng VIP");
-
-            // Chọn sẵn đúng loại phòng cũ
-            foreach (var item in cboLoaiPhong.Items)
+            // Nạp loại phòng từ cùng file LoaiPhong.txt đang được màn hình quản lý loại phòng sử dụng.
+            foreach (var loai in DuLieu.DocLoaiPhong())
             {
-                if (item.ToString().Contains(loaiPhongCu))
-                {
-                    cboLoaiPhong.SelectedItem = item;
-                    break;
-                }
+                string hienThi = $"{loai.MaLoai} - {loai.TenLoai}";
+                cboLoaiPhong.Items.Add(hienThi);
+                if (loai.TenLoai.Equals(loaiPhongCu.Trim(), StringComparison.OrdinalIgnoreCase))
+                    cboLoaiPhong.SelectedItem = hienThi;
             }
             if (cboLoaiPhong.SelectedIndex == -1 && cboLoaiPhong.Items.Count > 0)
                 cboLoaiPhong.SelectedIndex = 0;
 
-            // 3. Nạp dữ liệu cho ComboBox Trạng thái
+            // Trạng thái phòng sử dụng thống nhất ba giá trị trong Phong.txt.
+            cboTrangThai.Items.Clear();
             cboTrangThai.Items.Add("Trống");
             cboTrangThai.Items.Add("Có khách");
             cboTrangThai.Items.Add("Đang dọn");
-            cboTrangThai.SelectedItem = trangThaiCu;
+            cboTrangThai.SelectedItem = DuLieu.ChuanHoaTrangThaiPhong(trangThaiCu);
             if (cboTrangThai.SelectedIndex == -1)
                 cboTrangThai.SelectedIndex = 0;
         }
 
         private void btnLuu_Click(object sender, EventArgs e)
         {
-            if (string.IsNullOrWhiteSpace(txtSoPhong.Text))
+            if (string.IsNullOrWhiteSpace(txtSoPhong.Text)
+                || txtSoPhong.Text.Contains('|') || txtSoPhong.Text.Contains('\r') || txtSoPhong.Text.Contains('\n'))
             {
-                MessageBox.Show("Vui lòng nhập số phòng!", "Cảnh báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Vui lòng nhập số phòng hợp lệ, không chứa ký tự | hoặc xuống dòng.", "Cảnh báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 txtSoPhong.Focus();
+                return;
+            }
+
+            if (cboLoaiPhong.SelectedItem == null)
+            {
+                MessageBox.Show("Chưa có loại phòng hợp lệ.", "Thiếu dữ liệu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 

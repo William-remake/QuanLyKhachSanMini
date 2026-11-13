@@ -14,5 +14,7 @@ namespace QuanLyKhachSanMini.Models
         public DateTime NgayDen { get; set; }
         public DateTime NgayDi { get; set; }
         public string TrangThai { get; set; }
+        // Lưu đơn giá tại thời điểm đặt để thay đổi bảng giá sau này không ảnh hưởng lượt đã đặt.
+        public decimal GiaPhong { get; set; }
     }
 }

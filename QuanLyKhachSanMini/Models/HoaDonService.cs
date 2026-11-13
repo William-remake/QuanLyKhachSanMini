@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Configuration;
+﻿using System.Configuration;
 using System.Globalization;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace QuanLyKhachSanMini.Models
 {
@@ -16,6 +12,7 @@ namespace QuanLyKhachSanMini.Models
         public string MaPhong { get; set; } = "";
         public DateTime NgayDen { get; set; }
         public DateTime NgayDiDuKien { get; set; }
+        public decimal GiaPhong { get; set; }
     }
 
     public class KetQuaTinhTien
@@ -24,7 +21,8 @@ namespace QuanLyKhachSanMini.Models
         public DateTime ThoiDiemTra { get; set; }
         public decimal GiaPhong { get; set; }
         public int SoDem { get; set; }
-        public decimal TienPhong => SoDem * GiaPhong;
+        public decimal? TienPhongDaLuu { get; set; }
+        public decimal TienPhong => TienPhongDaLuu ?? (SoDem * GiaPhong);
         public List<ChiTietDichVu> DichVu { get; set; } = new();
         public decimal TienDV => DichVu.Sum(x => x.ThanhTien);
         public decimal PhuThu { get; set; }
@@ -34,111 +32,92 @@ namespace QuanLyKhachSanMini.Models
     public class ThongKeThang
     {
         public decimal DoanhThu { get; set; }
-        public double CongSuat { get; set; }   // phần trăm
+        public double CongSuat { get; set; }
         public List<HoaDon> HoaDon { get; set; } = new();
     }
 
     public class HoaDonService
     {
-        // Các giá trị TrangThai nghĩa là "đang lưu trú" (khớp với DichVuForm)
         public static readonly string[] TrangThaiDangO = { "DangO", "DaNhan", "DangLuuTru" };
         private const string TrangThaiDaTra = "DaTra";
         private const string PhongDangDon = "Đang dọn";
 
-        private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
         private readonly ChiTietDichVuRepository _ctRepo = new();
+        private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-        // ---------- Cấu hình App.config ----------
-        public static int GioTraPhong =>
-            int.TryParse(ConfigurationManager.AppSettings["GioTraPhong"], out int g) ? g : 12;
-
-        public static decimal PhuThuTraTre =>
-            decimal.TryParse(ConfigurationManager.AppSettings["PhuThuTraTre"], out decimal v) ? v : 200000;
-
-        // ---------- Đọc/ghi file ----------
-        private static string Path_(string file)
+        // Đọc giá trị từ App.config, hỗ trợ cả key cũ và key tên tiếng Anh.
+        public static int GioTraPhong
         {
-            var dir = Path.Combine(AppContext.BaseDirectory, "Data");
-            Directory.CreateDirectory(dir);
-            return Path.Combine(dir, file);
-        }
-
-        private static List<string> DocDong(string file)
-        {
-            var path = Path_(file);
-            if (!File.Exists(path)) return new List<string>();
-            return File.ReadAllLines(path, Encoding.UTF8)
-                       .Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
-        }
-
-        private static void GhiDong(string file, IEnumerable<string> lines) =>
-            File.WriteAllLines(Path_(file), lines, Encoding.UTF8);
-
-        private static DateTime ParseNgay(string s) =>
-            DateTime.TryParse(s.Trim(), Inv, DateTimeStyles.None, out var d) ? d : DateTime.Today;
-
-        // ---------- Tra cứu ----------
-        private string TimTenKhach(string cccd)
-        {
-            foreach (var line in DocDong("Khach.txt"))
+            get
             {
-                var p = line.Split('|');
-                // GIẢ ĐỊNH: cột 0 = CCCD, cột 1 = họ tên (chỉnh nếu Khach.txt khác)
-                if (p.Length >= 2 && p[0].Trim() == cccd) return p[1].Trim();
+                string? text = ConfigurationManager.AppSettings["GioTraPhong"]
+                    ?? ConfigurationManager.AppSettings["LateCheckoutTime"];
+                if (int.TryParse(text, out int gio)) return Math.Clamp(gio, 0, 23);
+                if (TimeSpan.TryParse(text, CultureInfo.InvariantCulture, out var time))
+                    return Math.Clamp(time.Hours, 0, 23);
+                return 12;
             }
-            return cccd;
         }
 
-        // MaPhong -> Phong.txt (tên loại) -> LoaiPhong.txt (giá), nối bằng TÊN loại
-        public decimal LayGiaPhong(string maPhong)
+        public static decimal PhuThuTraTre
         {
-            string tenLoai = "";
-            foreach (var line in DocDong("Phong.txt"))
+            get
             {
-                var p = line.Split('|');
-                if (p.Length >= 2 && p[0].Trim() == maPhong) { tenLoai = p[1].Trim(); break; }
+                string? text = ConfigurationManager.AppSettings["PhuThuTraTre"]
+                    ?? ConfigurationManager.AppSettings["LateCheckoutFee"];
+                if (decimal.TryParse(text, NumberStyles.Number, Inv, out var fee)) return Math.Max(0, fee);
+                if (decimal.TryParse(text, NumberStyles.Number, CultureInfo.CurrentCulture, out fee)) return Math.Max(0, fee);
+                return 200000m;
             }
-            foreach (var line in DocDong("LoaiPhong.txt"))
-            {
-                var p = line.Split('|');
-                if (p.Length >= 3 && p[1].Trim().Equals(tenLoai, StringComparison.OrdinalIgnoreCase))
-                    return decimal.TryParse(p[2].Trim(), out var g) ? g : 0;
-            }
-            return 0;
         }
+
+        private static string TimTenKhach(string cccd) =>
+            DuLieu.DocKhach().FirstOrDefault(k => k.CCCD.Equals(cccd, StringComparison.OrdinalIgnoreCase))?.HoTen ?? cccd;
+
+        public decimal LayGiaPhong(string maPhong) => DuLieu.LayGiaPhongTheoPhong(maPhong);
 
         public List<LuotO> LayLuotDangO()
         {
             var ds = new List<LuotO>();
-            foreach (var line in DocDong("DatPhong.txt"))
+            foreach (var d in DuLieu.DocDatPhong().Where(x => DuLieu.LaTrangThaiDangLuuTru(x.TrangThai)))
             {
-                var p = line.Split('|');
-                if (p.Length < 6) continue;
-                if (!TrangThaiDangO.Contains(p[5].Trim(), StringComparer.OrdinalIgnoreCase)) continue;
                 ds.Add(new LuotO
                 {
-                    MaDatPhong = p[0].Trim(),
-                    CCCD = p[1].Trim(),
-                    TenKhach = TimTenKhach(p[1].Trim()),
-                    MaPhong = p[2].Trim(),
-                    NgayDen = ParseNgay(p[3]),
-                    NgayDiDuKien = ParseNgay(p[4])
+                    MaDatPhong = d.Ma,
+                    CCCD = d.CCCD,
+                    TenKhach = TimTenKhach(d.CCCD),
+                    MaPhong = d.SoPhong,
+                    NgayDen = d.NgayDen,
+                    NgayDiDuKien = d.NgayDi,
+                    GiaPhong = d.GiaPhong
                 });
             }
             return ds;
         }
 
-        // ---------- Tính tiền ----------
         public KetQuaTinhTien TinhTien(LuotO luot, DateTime thoiDiemTra)
         {
+            if (thoiDiemTra < luot.NgayDen)
+                throw new InvalidOperationException("Thời điểm trả phòng không được trước ngày nhận phòng.");
+            if (thoiDiemTra > DateTime.Now)
+                throw new InvalidOperationException("Không thể trả phòng ở thời điểm trong tương lai.");
+
+            decimal giaPhong = luot.GiaPhong > 0 ? luot.GiaPhong : LayGiaPhong(luot.MaPhong);
+            if (giaPhong <= 0)
+                throw new InvalidOperationException($"Không tìm thấy giá của loại phòng đang gán cho phòng {luot.MaPhong}. Hãy kiểm tra LoaiPhong.txt và Phong.txt.");
+
             var kq = new KetQuaTinhTien
             {
                 Luot = luot,
                 ThoiDiemTra = thoiDiemTra,
-                GiaPhong = LayGiaPhong(luot.MaPhong),
+                GiaPhong = giaPhong,
                 SoDem = Math.Max(1, (thoiDiemTra.Date - luot.NgayDen.Date).Days),
-                DichVu = _ctRepo.LayTheoDatPhong(luot.MaDatPhong).OrderBy(x => x.NgayDung).ToList()
+                DichVu = _ctRepo.LayTheoDatPhong(luot.MaDatPhong)
+                    .Where(x => x.NgayDung <= thoiDiemTra)
+                    .OrderBy(x => x.NgayDung).ToList()
             };
+
+            // Phụ thu chỉ áp dụng khi thời điểm trả sau mốc 12:00 (hoặc giờ cấu hình).
             if (thoiDiemTra.TimeOfDay > TimeSpan.FromHours(GioTraPhong))
                 kq.PhuThu = PhuThuTraTre;
             return kq;
@@ -147,107 +126,166 @@ namespace QuanLyKhachSanMini.Models
         public string TaoNoiDung(KetQuaTinhTien kq, string maHD = "(chưa lập)")
         {
             var sb = new StringBuilder();
-            string line = new string('-', 46);
+            string line = new string('-', 54);
             sb.AppendLine("HOTEL MINI - HÓA ĐƠN THANH TOÁN");
             sb.AppendLine(line);
             sb.AppendLine($"Mã hóa đơn : {maHD}");
             sb.AppendLine($"Mã đặt phòng: {kq.Luot.MaDatPhong}");
             sb.AppendLine($"Khách hàng : {kq.Luot.TenKhach}");
+            sb.AppendLine($"CCCD       : {kq.Luot.CCCD}");
             sb.AppendLine($"Phòng      : {kq.Luot.MaPhong}");
             sb.AppendLine($"Ngày đến   : {kq.Luot.NgayDen:dd/MM/yyyy}");
             sb.AppendLine($"Thời điểm trả: {kq.ThoiDiemTra:dd/MM/yyyy HH:mm}");
             sb.AppendLine(line);
-            sb.AppendLine($"Tiền phòng : {kq.SoDem} đêm x {kq.GiaPhong:N0} = {kq.TienPhong:N0} đ");
+            sb.AppendLine($"Tiền phòng ({kq.SoDem} đêm x {kq.GiaPhong:N0}): {kq.TienPhong:N0} đ");
             sb.AppendLine("Dịch vụ:");
             if (kq.DichVu.Count == 0) sb.AppendLine("  (không có)");
             foreach (var d in kq.DichVu)
                 sb.AppendLine($"  {d.TenDV} x{d.SoLuong} @ {d.DonGiaLucDung:N0} = {d.ThanhTien:N0} đ");
             sb.AppendLine($"Tiền dịch vụ: {kq.TienDV:N0} đ");
-            sb.AppendLine($"Phụ thu trả trễ (sau {GioTraPhong}:00): {kq.PhuThu:N0} đ");
+            sb.AppendLine($"Phụ thu trả sau {GioTraPhong:00}:00: {kq.PhuThu:N0} đ");
             sb.AppendLine(line);
-            sb.AppendLine($"TỔNG CỘNG  : {kq.Tong:N0} đ");
+            sb.AppendLine($"TỔNG CỘNG: {kq.Tong:N0} đ");
             return sb.ToString();
         }
 
-        // ---------- Trả phòng ----------
-        private string SinhMaHD()
+        public string TaoNoiDung(HoaDon hoaDon)
         {
-            int max = 0;
-            foreach (var l in DocDong("HoaDon.txt"))
+            var luot = new LuotO
             {
-                var ma = l.Split('|')[0];
-                if (ma.StartsWith("HD") && int.TryParse(ma.Substring(2), out int n) && n > max) max = n;
-            }
-            return "HD" + (max + 1).ToString("0000");
+                MaDatPhong = hoaDon.MaDatPhong,
+                TenKhach = hoaDon.TenKhach,
+                CCCD = hoaDon.CCCD,
+                MaPhong = hoaDon.MaPhong,
+                NgayDen = hoaDon.NgayDen,
+                NgayDiDuKien = hoaDon.NgayTra
+            };
+            var kq = new KetQuaTinhTien
+            {
+                Luot = luot,
+                ThoiDiemTra = hoaDon.NgayTra,
+                SoDem = hoaDon.SoDem,
+                GiaPhong = hoaDon.SoDem > 0 ? hoaDon.TienPhong / hoaDon.SoDem : 0,
+                TienPhongDaLuu = hoaDon.TienPhong,
+                DichVu = _ctRepo.LayTheoDatPhong(hoaDon.MaDatPhong)
+                    .Where(x => x.NgayDung <= hoaDon.NgayTra)
+                    .OrderBy(x => x.NgayDung).ToList(),
+                PhuThu = hoaDon.PhuThu
+            };
+            return TaoNoiDung(kq, hoaDon.MaHD);
+        }
+
+        private static string SinhMaHD()
+        {
+            int max = DuLieu.DocDong("HoaDon.txt")
+                .Select(line => line.Split('|').FirstOrDefault() ?? "")
+                .Select(ma => ma.StartsWith("HD", StringComparison.OrdinalIgnoreCase)
+                    && int.TryParse(ma[2..], out int n) ? n : 0)
+                .DefaultIfEmpty(0).Max();
+            return $"HD{max + 1:0000}";
         }
 
         public HoaDon TraPhong(KetQuaTinhTien kq)
         {
-            var hd = new HoaDon
+            ArgumentNullException.ThrowIfNull(kq);
+
+            // Mã được sinh từ dữ liệu hiện tại; trong giao dịch sẽ kiểm tra lại để tránh trùng.
+            string maHD = SinhMaHD();
+            string fileTxtTuongDoi = Path.Combine("HoaDon", maHD + ".txt");
+            string fileTxtDayDu = DuLieu.LayDuongDanData(fileTxtTuongDoi);
+            HoaDon? hoaDonDaTao = null;
+
+            DuLieu.ThucHienGiaoDich(() =>
             {
-                MaHD = SinhMaHD(),
-                MaDatPhong = kq.Luot.MaDatPhong,
-                TenKhach = kq.Luot.TenKhach,
-                MaPhong = kq.Luot.MaPhong,
-                NgayDen = kq.Luot.NgayDen,
-                NgayTra = kq.ThoiDiemTra,
-                SoDem = kq.SoDem,
-                TienPhong = kq.TienPhong,
-                TienDV = kq.TienDV,
-                PhuThu = kq.PhuThu,
-                Tong = kq.Tong,
-                NgayLap = DateTime.Now
-            };
+                var luotHienTai = LayLuotDangO().FirstOrDefault(x =>
+                    x.MaDatPhong.Equals(kq.Luot.MaDatPhong, StringComparison.OrdinalIgnoreCase));
+                if (luotHienTai == null)
+                    throw new InvalidOperationException("Lượt đặt phòng không còn ở trạng thái đang lưu trú. Vui lòng tải lại danh sách.");
 
-            var lines = DocDong("HoaDon.txt");
-            lines.Add(hd.ToLine());
-            GhiDong("HoaDon.txt", lines);
+                var datPhong = DuLieu.DocDatPhong();
+                var booking = datPhong.FirstOrDefault(d =>
+                    d.Ma.Equals(luotHienTai.MaDatPhong, StringComparison.OrdinalIgnoreCase));
+                if (booking == null || !DuLieu.LaTrangThaiDangLuuTru(booking.TrangThai))
+                    throw new InvalidOperationException("Lượt đặt phòng đã thay đổi trạng thái. Vui lòng tải lại danh sách.");
 
-            CapNhatCot("DatPhong.txt", kq.Luot.MaDatPhong, 5, TrangThaiDaTra);
-            CapNhatCot("Phong.txt", kq.Luot.MaPhong, 3, PhongDangDon);
-            return hd;
-        }
+                if (DuLieu.DocDong("HoaDon.txt").Select(HoaDon.FromLine).Any(h =>
+                        h != null && h.MaDatPhong.Equals(booking.Ma, StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidOperationException("Đặt phòng này đã có hóa đơn, không thể lập trùng.");
 
-        // Sửa 1 cột của dòng có cột 0 = khóa, giữ nguyên các cột khác
-        private void CapNhatCot(string file, string khoa, int cot, string giaTri)
-        {
-            var lines = DocDong(file);
-            for (int i = 0; i < lines.Count; i++)
-            {
-                var p = lines[i].Split('|');
-                if (p.Length > cot && p[0].Trim() == khoa)
+                if (DuLieu.DocDong("HoaDon.txt").Select(HoaDon.FromLine).Any(h =>
+                        h != null && h.MaHD.Equals(maHD, StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidOperationException("Mã hóa đơn vừa được sử dụng ở phiên khác. Vui lòng thao tác trả phòng lại.");
+
+                if (!DuLieu.DocPhong().Any(p => p.SoPhong.Equals(booking.SoPhong, StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidOperationException($"Phòng {booking.SoPhong} không còn tồn tại trong Phong.txt.");
+
+                // Tính lại trong giao dịch để lấy đúng giá và dịch vụ mới nhất, không dùng bản xem trước cũ.
+                var ketQuaMoi = TinhTien(luotHienTai, kq.ThoiDiemTra);
+                var hd = new HoaDon
                 {
-                    p[cot] = giaTri;
-                    lines[i] = string.Join("|", p);
-                }
-            }
-            GhiDong(file, lines);
+                    MaHD = maHD,
+                    MaDatPhong = booking.Ma,
+                    TenKhach = luotHienTai.TenKhach,
+                    CCCD = luotHienTai.CCCD,
+                    MaPhong = booking.SoPhong,
+                    NgayDen = booking.NgayDen,
+                    NgayTra = ketQuaMoi.ThoiDiemTra,
+                    SoDem = ketQuaMoi.SoDem,
+                    TienPhong = ketQuaMoi.TienPhong,
+                    TienDV = ketQuaMoi.TienDV,
+                    PhuThu = ketQuaMoi.PhuThu,
+                    Tong = ketQuaMoi.Tong,
+                    NgayLap = DateTime.Now
+                };
+
+                var hoaDonLines = DuLieu.DocDong("HoaDon.txt");
+                hoaDonLines.Add(hd.ToLine());
+                DuLieu.GhiDong("HoaDon.txt", hoaDonLines);
+
+                booking.TrangThai = TrangThaiDaTra;
+                DuLieu.GhiDatPhong(datPhong);
+                if (!DuLieu.CapNhatTrangThaiPhong(booking.SoPhong, PhongDangDon))
+                    throw new InvalidOperationException($"Không cập nhật được trạng thái phòng {booking.SoPhong}.");
+
+                Directory.CreateDirectory(Path.GetDirectoryName(fileTxtDayDu)!);
+                File.WriteAllText(fileTxtDayDu, TaoNoiDung(ketQuaMoi, hd.MaHD), new UTF8Encoding(false));
+                hoaDonDaTao = hd;
+            }, "HoaDon.txt", "DatPhong.txt", "Phong.txt", fileTxtTuongDoi);
+
+            return hoaDonDaTao ?? throw new InvalidOperationException("Không tạo được hóa đơn.");
         }
 
-        // ---------- Thống kê ----------
-        public List<HoaDon> LayHoaDon() =>
-            DocDong("HoaDon.txt").Select(HoaDon.FromLine).Where(h => h != null).Select(h => h!).ToList();
+        public List<HoaDon> LayHoaDon() => DuLieu.DocDong("HoaDon.txt")
+            .Select(HoaDon.FromLine).Where(h => h != null).Select(h => h!).ToList();
 
-        public int TongSoPhong() => DocDong("Phong.txt").Count;
+        public int TongSoPhong() => DuLieu.DocPhong().Count;
 
         public ThongKeThang ThongKe(int thang, int nam)
         {
-            // Doanh thu: hóa đơn lập trong tháng
-            var hdThang = LayHoaDon()
+            var hoaDon = LayHoaDon();
+            var hdThang = hoaDon
                 .Where(h => h.NgayLap.Month == thang && h.NgayLap.Year == nam)
                 .OrderBy(h => h.NgayLap).ToList();
 
-            // Công suất: đêm phòng đã bán rơi vào tháng / (số phòng x số ngày trong tháng)
-            int dem = 0;
-            foreach (var h in LayHoaDon())
-                for (int i = 0; i < h.SoDem; i++)
-                {
-                    var ngay = h.NgayDen.Date.AddDays(i);
-                    if (ngay.Month == thang && ngay.Year == nam) dem++;
-                }
+            int demPhongDem = 0;
+            // Đếm đêm đã thanh toán từ các hóa đơn.
+            foreach (var h in hoaDon)
+                demPhongDem += DemDemTrongThang(h.NgayDen.Date, h.NgayDen.Date.AddDays(h.SoDem), thang, nam);
+
+            // Bổ sung số đêm đã sử dụng của khách hiện vẫn đang lưu trú trong tháng hiện tại.
+            DateTime ngayKetThuc = DateTime.Today;
+            foreach (var luot in LayLuotDangO())
+            {
+                DateTime ketThuc = luot.NgayDiDuKien.Date < ngayKetThuc
+                    ? luot.NgayDiDuKien.Date : ngayKetThuc;
+                if (ketThuc > luot.NgayDen.Date)
+                    demPhongDem += DemDemTrongThang(luot.NgayDen.Date, ketThuc, thang, nam);
+            }
+
             int tongPhong = TongSoPhong();
             int ngayTrongThang = DateTime.DaysInMonth(nam, thang);
-            double congSuat = tongPhong == 0 ? 0 : dem * 100.0 / (tongPhong * ngayTrongThang);
+            double congSuat = tongPhong == 0 ? 0
+                : Math.Min(100.0, demPhongDem * 100.0 / (tongPhong * ngayTrongThang));
 
             return new ThongKeThang
             {
@@ -257,12 +295,15 @@ namespace QuanLyKhachSanMini.Models
             };
         }
 
-        // ---------- Dùng cho Dashboard ----------
-        public int DemPhongCoKhach() =>
-            DocDong("Phong.txt").Count(l =>
-            {
-                var p = l.Split('|');
-                return p.Length >= 4 && p[3].Trim().Equals("Có khách", StringComparison.OrdinalIgnoreCase);
-            });
+        private static int DemDemTrongThang(DateTime tuNgay, DateTime denNgayExclusive, int thang, int nam)
+        {
+            int dem = 0;
+            for (DateTime ngay = tuNgay.Date; ngay < denNgayExclusive.Date; ngay = ngay.AddDays(1))
+                if (ngay.Month == thang && ngay.Year == nam) dem++;
+            return dem;
+        }
+
+        public int DemPhongCoKhach() => DuLieu.DocPhong().Count(p =>
+            p.TrangThai.Equals("Có khách", StringComparison.OrdinalIgnoreCase));
     }
 }

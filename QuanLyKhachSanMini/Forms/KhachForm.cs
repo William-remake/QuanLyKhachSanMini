@@ -174,13 +174,12 @@ namespace QuanLyKhachSanMini.Forms
                 return;
             }
 
-            // Không xóa khách đang có đặt phòng còn hiệu lực
-            bool dangDat = DuLieu.DocDatPhong().Any(d =>
-                d.CCCD == cccd && (d.TrangThai == "DaDat" || d.TrangThai == "DaNhan"));
+            // Giữ khách nếu còn bất kỳ lịch sử đặt phòng nào để không làm đứt liên kết dữ liệu.
+            bool dangDat = DuLieu.DocDatPhong().Any(d => d.CCCD == cccd);
 
             if (dangDat)
             {
-                MessageBox.Show("Khách này đang có đặt phòng hoặc đang ở, không thể xóa.",
+                MessageBox.Show("Khách hàng đã có lịch sử đặt phòng nên không thể xóa để bảo toàn dữ liệu.",
                     "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }

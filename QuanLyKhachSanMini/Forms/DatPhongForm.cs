@@ -16,7 +16,6 @@ namespace QuanLyKhachSanMini.Forms
         private List<DatPhong> dsDat = new();
         private List<KhachHang> dsKhach = new();
         private string soPhongChon = "";
-        private string filePath = "Data\\Phong.txt";
 
         public DatPhongForm()
         {
@@ -25,7 +24,6 @@ namespace QuanLyKhachSanMini.Forms
             Load += DatPhongForm_Load;
             btnTimPhong.Click += BtnTimPhong_Click;
             btnDatPhong.Click += BtnDatPhong_Click;
-            btnNhanPhong.Click += BtnNhanPhong_Click;
             btnHuyDat.Click += BtnHuyDat_Click;
             btnLamMoi.Click += BtnLamMoi_Click;
             dgvPhongTrong.CellClick += DgvPhongTrong_CellClick;
@@ -60,7 +58,7 @@ namespace QuanLyKhachSanMini.Forms
 
         private void NapLoaiPhong()
         {
-            var loai = DuLieu.DocPhong().Select(p => p.Loai).Distinct().ToList();
+            var loai = DuLieu.DocLoaiPhong().Select(p => p.TenLoai).ToList();
             loai.Insert(0, "Tất cả");
             cboLoaiPhong.DataSource = loai;
         }
@@ -121,38 +119,6 @@ namespace QuanLyKhachSanMini.Forms
             lblPhongChon.Text = soPhong == "" ? "Chưa chọn phòng" : $"Phòng đã chọn: {soPhong}";
         }
 
-        // Hàm hỗ trợ cập nhật trạng thái phòng trong file Phong.txt khi có thay đổi (Nhận phòng, Trả phòng, Hủy...)
-        private void CapNhatTrangThaiPhongTrongFile(string soPhongCanSua, string trangThaiMoi)
-        {
-            if (!File.Exists(filePath)) return;
-
-            string[] lines = File.ReadAllLines(filePath);
-            List<string> updatedLines = new List<string>();
-
-            foreach (string line in lines)
-            {
-                if (string.IsNullOrWhiteSpace(line)) continue;
-                string[] parts = line.Split('|');
-                if (parts.Length >= 4)
-                {
-                    string soPhong = parts[0].Trim();
-                    string loaiPhong = parts[1].Trim();
-                    string tang = parts[2].Trim();
-                    string trangThai = parts[3].Trim();
-
-                    // Nếu đúng số phòng cần đổi trạng thái
-                    if (soPhong == soPhongCanSua)
-                    {
-                        trangThai = trangThaiMoi; // Cập nhật trạng thái mới (VD: "Có khách", "Trống"...)
-                    }
-
-                    updatedLines.Add($"{soPhong}|{loaiPhong}|{tang}|{trangThai}");
-                }
-            }
-
-            File.WriteAllLines(filePath, updatedLines);
-        }
-
         // ---------- Kiểm tra trùng lịch ----------
 
         // Hai khoảng [den, di) và [d.NgayDen, d.NgayDi) trùng nhau khi:
@@ -160,8 +126,8 @@ namespace QuanLyKhachSanMini.Forms
         private bool PhongBiTrung(string soPhong, DateTime den, DateTime di)
         {
             return dsDat.Any(d =>
-                d.SoPhong == soPhong &&
-                (d.TrangThai == "DaDat" || d.TrangThai == "DaNhan") &&
+                d.SoPhong.Equals(soPhong, StringComparison.OrdinalIgnoreCase) &&
+                (d.TrangThai == "DaDat" || DuLieu.LaTrangThaiDangLuuTru(d.TrangThai)) &&
                 den < d.NgayDi && d.NgayDen < di);
         }
 
@@ -197,7 +163,8 @@ namespace QuanLyKhachSanMini.Forms
 
             var ketQua = DuLieu.DocPhong()
                 .Where(p => loai == "Tất cả" || p.Loai == loai)
-                .Where(p => p.TrangThai != "Đang dọn" || den > DateTime.Today)
+                .Where(p => !p.TrangThai.Equals("Đang dọn", StringComparison.OrdinalIgnoreCase) || den > DateTime.Today)
+                .Where(p => !p.TrangThai.Equals("Có khách", StringComparison.OrdinalIgnoreCase) || den > DateTime.Today)
                 .Where(p => !PhongBiTrung(p.SoPhong, den, di))
                 .Select(p => new { SoPhong = p.SoPhong, Loai = p.Loai, Tang = p.Tang })
                 .ToList();
@@ -246,18 +213,33 @@ namespace QuanLyKhachSanMini.Forms
                 return;
             }
 
-            int max = dsDat
-                .Select(d => int.TryParse(d.Ma.Replace("DP", ""), out var n) ? n : 0)
-                .DefaultIfEmpty(0).Max();
+            if (!DuLieu.DocKhach().Any(k => k.CCCD == cboKhach.SelectedValue.ToString()))
+            {
+                Canh("Khách hàng đã bị xóa hoặc thay đổi. Vui lòng tải lại danh sách khách.");
+                NapKhach();
+                return;
+            }
+            if (!DuLieu.DocPhong().Any(p => p.SoPhong == soPhongChon))
+            {
+                Canh("Phòng đã bị xóa. Vui lòng tìm phòng lại.");
+                return;
+            }
+            decimal giaPhong = DuLieu.LayGiaPhongTheoPhong(soPhongChon);
+            if (giaPhong <= 0)
+            {
+                Canh("Phòng chưa được gán loại phòng có giá hợp lệ. Hãy kiểm tra quản lý loại phòng.");
+                return;
+            }
 
             dsDat.Add(new DatPhong
             {
-                Ma = $"DP{max + 1:000}",
+                Ma = DuLieu.SinhMaDatPhong(),
                 CCCD = cboKhach.SelectedValue.ToString()!,
                 SoPhong = soPhongChon,
                 NgayDen = den,
                 NgayDi = di,
-                TrangThai = "DaDat"
+                TrangThai = "DaDat",
+                GiaPhong = giaPhong
             });
 
             DuLieu.GhiDatPhong(dsDat);
@@ -284,31 +266,20 @@ namespace QuanLyKhachSanMini.Forms
             var d = LayDatDangChon();
             if (d == null) return;
 
-            if (d.TrangThai != "DaDat")
+            try
             {
-                Canh("Chỉ nhận phòng được với đặt phòng ở trạng thái 'Đã đặt'.");
-                return;
+                // Cập nhật trạng thái đặt phòng và trạng thái vật lý phòng trong cùng giao dịch.
+                DuLieu.NhanPhong(d.Ma);
+                TaiDatPhong();
+                MessageBox.Show("Nhận phòng thành công.", "Thông báo",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
-            if (DateTime.Today < d.NgayDen)
+            catch (Exception ex)
             {
-                Canh($"Chưa đến ngày nhận phòng ({d.NgayDen:dd/MM/yyyy}).");
-                return;
+                Canh(ex.Message);
+                dsDat = DuLieu.DocDatPhong();
+                TaiDatPhong();
             }
-            if (DateTime.Today >= d.NgayDi)
-            {
-                Canh("Đặt phòng này đã quá hạn.");
-                return;
-            }
-
-            d.TrangThai = "DaNhan";
-            DuLieu.GhiDatPhong(dsDat);
-            TaiDatPhong();
-
-            //BỔ SUNG ĐOẠN NÀY ĐỂ ĐỔI TRẠNG THÁI PHÒNG THÀNH "Có khách" TRONG Phong.txt
-            CapNhatTrangThaiPhongTrongFile(d.SoPhong, "Có khách");
-
-            MessageBox.Show("Nhận phòng thành công.", "Thông báo",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void BtnHuyDat_Click(object? sender, EventArgs e)
@@ -330,8 +301,8 @@ namespace QuanLyKhachSanMini.Forms
             DuLieu.GhiDatPhong(dsDat);
             TaiDatPhong();
 
-            //Khi hủy đặt phòng, chuyển trạng thái phòng trong Phong.txt về lại "Trống"
-            CapNhatTrangThaiPhongTrongFile(d.SoPhong, "Trống");
+            // Đặt phòng tương lai không thay đổi trạng thái vật lý hiện tại của phòng.
+            // Không tự chuyển về Trống vì phòng có thể đang có khách hoặc đang dọn.
         }
 
         private void BtnLamMoi_Click(object? sender, EventArgs e)
@@ -358,7 +329,7 @@ namespace QuanLyKhachSanMini.Forms
 
         private void btnNhanPhong_Click_1(object sender, EventArgs e)
         {
-
+            BtnNhanPhong_Click(sender, e);
         }
     }
 }

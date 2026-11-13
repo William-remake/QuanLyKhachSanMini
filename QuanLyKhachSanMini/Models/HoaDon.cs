@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Globalization;
 
 namespace QuanLyKhachSanMini.Models
 {
@@ -12,6 +7,7 @@ namespace QuanLyKhachSanMini.Models
         public string MaHD { get; set; } = "";
         public string MaDatPhong { get; set; } = "";
         public string TenKhach { get; set; } = "";
+        public string CCCD { get; set; } = "";
         public string MaPhong { get; set; } = "";
         public DateTime NgayDen { get; set; }
         public DateTime NgayTra { get; set; }
@@ -25,30 +21,36 @@ namespace QuanLyKhachSanMini.Models
         private const string Fmt = "yyyy-MM-dd HH:mm";
         private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
-        // MaHD|MaDatPhong|TenKhach|MaPhong|NgayDen|NgayTra|SoDem|TienPhong|TienDV|PhuThu|Tong|NgayLap
-        public string ToLine() => string.Join("|", MaHD, MaDatPhong, TenKhach, MaPhong,
-            NgayDen.ToString(Fmt, Inv), NgayTra.ToString(Fmt, Inv), SoDem,
-            TienPhong.ToString(Inv), TienDV.ToString(Inv), PhuThu.ToString(Inv),
-            Tong.ToString(Inv), NgayLap.ToString(Fmt, Inv));
+        // 12 cột cũ vẫn đọc được; cột CCCD thứ 13 được bổ sung cho hóa đơn mới.
+        public string ToLine() => string.Join("|", LamSach(MaHD), LamSach(MaDatPhong), LamSach(TenKhach), LamSach(MaPhong),
+            NgayDen.ToString(Fmt, Inv), NgayTra.ToString(Fmt, Inv),
+            SoDem.ToString(Inv), TienPhong.ToString(Inv), TienDV.ToString(Inv),
+            PhuThu.ToString(Inv), Tong.ToString(Inv), NgayLap.ToString(Fmt, Inv), LamSach(CCCD));
+
+        private static string LamSach(string? value) => (value ?? "").Trim()
+            .Replace("|", "/").Replace("\r", " ").Replace("\n", " ");
 
         public static HoaDon? FromLine(string line)
         {
             var p = line.Split('|');
-            if (p.Length < 12) return null;
+            if (p.Length < 12
+                || !DateTime.TryParseExact(p[4], Fmt, Inv, DateTimeStyles.None, out var den)
+                || !DateTime.TryParseExact(p[5], Fmt, Inv, DateTimeStyles.None, out var tra)
+                || !int.TryParse(p[6], NumberStyles.Integer, Inv, out var dem)
+                || !decimal.TryParse(p[7], NumberStyles.Number, Inv, out var tienPhong)
+                || !decimal.TryParse(p[8], NumberStyles.Number, Inv, out var tienDV)
+                || !decimal.TryParse(p[9], NumberStyles.Number, Inv, out var phuThu)
+                || !decimal.TryParse(p[10], NumberStyles.Number, Inv, out var tong)
+                || !DateTime.TryParseExact(p[11], Fmt, Inv, DateTimeStyles.None, out var ngayLap))
+                return null;
+
             return new HoaDon
             {
-                MaHD = p[0],
-                MaDatPhong = p[1],
-                TenKhach = p[2],
-                MaPhong = p[3],
-                NgayDen = DateTime.Parse(p[4], Inv),
-                NgayTra = DateTime.Parse(p[5], Inv),
-                SoDem = int.Parse(p[6]),
-                TienPhong = decimal.Parse(p[7], Inv),
-                TienDV = decimal.Parse(p[8], Inv),
-                PhuThu = decimal.Parse(p[9], Inv),
-                Tong = decimal.Parse(p[10], Inv),
-                NgayLap = DateTime.Parse(p[11], Inv)
+                MaHD = p[0].Trim(), MaDatPhong = p[1].Trim(), TenKhach = p[2].Trim(),
+                MaPhong = p[3].Trim(), CCCD = p.Length >= 13 ? p[12].Trim() : "",
+                NgayDen = den, NgayTra = tra, SoDem = dem,
+                TienPhong = tienPhong, TienDV = tienDV, PhuThu = phuThu,
+                Tong = tong, NgayLap = ngayLap
             };
         }
     }

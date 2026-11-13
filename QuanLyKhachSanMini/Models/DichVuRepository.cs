@@ -1,47 +1,23 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Globalization;
 
 namespace QuanLyKhachSanMini.Models
 {
     public class DichVuRepository
     {
-        private readonly string _path;
+        private const string TenFile = "DichVu.txt";
 
-        public DichVuRepository()
-        {
-            var dir = Path.Combine(AppContext.BaseDirectory, "Data");
-            Directory.CreateDirectory(dir);
-            _path = Path.Combine(dir, "DichVu.txt");
-            if (!File.Exists(_path))
-                File.WriteAllText(_path, "", Encoding.UTF8);
-        }
+        public List<DichVu> LayTatCa() => DuLieu.DocDong(TenFile)
+            .Select(DichVu.FromLine).Where(x => x != null).Select(x => x!).ToList();
 
-        public List<DichVu> LayTatCa()
-        {
-            return File.ReadAllLines(_path, Encoding.UTF8)
-                       .Where(l => !string.IsNullOrWhiteSpace(l))
-                       .Select(DichVu.FromLine)
-                       .Where(d => d != null)
-                       .Select(d => d!)
-                       .ToList();
-        }
-
-        public void LuuTatCa(List<DichVu> ds)
-        {
-            File.WriteAllLines(_path, ds.Select(d => d.ToLine()), Encoding.UTF8);
-        }
+        public void LuuTatCa(List<DichVu> ds) => DuLieu.GhiDong(TenFile, ds.Select(x => x.ToLine()));
 
         public string SinhMaMoi()
         {
-            var ds = LayTatCa();
-            int max = 0;
-            foreach (var d in ds)
-                if (d.MaDV.StartsWith("DV") && int.TryParse(d.MaDV.Substring(2), out int n) && n > max)
-                    max = n;
-            return "DV" + (max + 1).ToString("000");
+            int max = LayTatCa()
+                .Select(d => d.MaDV.StartsWith("DV", StringComparison.OrdinalIgnoreCase)
+                    && int.TryParse(d.MaDV[2..], out int n) ? n : 0)
+                .DefaultIfEmpty(0).Max();
+            return $"DV{max + 1:000}";
         }
     }
 }

@@ -20,12 +20,10 @@ namespace QuanLyKhachSanMini.Forms
         private List<DichVu> _dsApDung = new();
         private bool _dangNap = false;
 
-        // Các giá trị TrangThai nghĩa là "khách đã nhận phòng, chưa trả"
-        private static readonly string[] TrangThaiDangO = { "DangO", "DaNhan", "DangLuuTru" };
-
         public DichVuForm()
         {
             InitializeComponent();
+            dgvDichVu.CellClick += dgvDichVu_CellClick;
         }
 
         private void DichVuForm_Load(object sender, EventArgs e)
@@ -130,7 +128,14 @@ namespace QuanLyKhachSanMini.Forms
             }
             if (!KiemTraNhap()) return;
 
-            dv.TenDV = txtTenDV.Text.Trim();
+            string tenMoi = txtTenDV.Text.Trim();
+            if (_ds.Any(x => x.MaDV != dv.MaDV && x.TenDV.Equals(tenMoi, StringComparison.OrdinalIgnoreCase)))
+            {
+                MessageBox.Show("Tên dịch vụ đã tồn tại.", "Trùng dữ liệu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            dv.TenDV = tenMoi;
             dv.DonVi = txtDonVi.Text.Trim();
             dv.DonGia = numDonGia.Value;
             dv.DangApDung = chkApDung.Checked;
@@ -214,43 +219,17 @@ namespace QuanLyKhachSanMini.Forms
             CapNhatThanhTien();
         }
 
-        private static string DuongDanData(string file) =>
-            Path.Combine(AppContext.BaseDirectory, "Data", file);
-
-        private string TimTenKhach(string cccd)
-        {
-            var path = DuongDanData("Khach.txt");
-            if (!File.Exists(path)) return cccd;
-            foreach (var line in File.ReadAllLines(path, Encoding.UTF8))
-            {
-                var p = line.Split('|');
-                // GIẢ ĐỊNH: cột 0 = CCCD, cột 1 = họ tên (chỉnh lại nếu Khach.txt khác)
-                if (p.Length >= 2 && p[0].Trim() == cccd) return p[1].Trim();
-            }
-            return cccd;
-        }
-
         private List<LuotItem> LayLuotDangLuuTru()
         {
-            var ds = new List<LuotItem>();
-            var path = DuongDanData("DatPhong.txt");
-            if (!File.Exists(path)) return ds;
-
-            foreach (var line in File.ReadAllLines(path, Encoding.UTF8))
-            {
-                if (string.IsNullOrWhiteSpace(line)) continue;
-                var p = line.Split('|');
-                if (p.Length < 6) continue;
-                if (!TrangThaiDangO.Contains(p[5].Trim(), StringComparer.OrdinalIgnoreCase)) continue;
-
-                string ma = p[0].Trim();
-                ds.Add(new LuotItem
+            var dsKhach = DuLieu.DocKhach();
+            return DuLieu.DocDatPhong()
+                .Where(d => DuLieu.LaTrangThaiDangLuuTru(d.TrangThai))
+                .Select(d => new LuotItem
                 {
-                    MaDatPhong = ma,
-                    HienThi = $"{ma} - {TimTenKhach(p[1].Trim())} - Phòng {p[2].Trim()}"
-                });
-            }
-            return ds;
+                    MaDatPhong = d.Ma,
+                    HienThi = $"{d.Ma} - {dsKhach.FirstOrDefault(k => k.CCCD == d.CCCD)?.HoTen ?? d.CCCD} - Phòng {d.SoPhong}"
+                })
+                .ToList();
         }
 
         private void TaiLuoiDaDung()
@@ -310,15 +289,41 @@ namespace QuanLyKhachSanMini.Forms
                 return;
             }
 
+            // Đọc lại dịch vụ để tránh ghi theo giá cũ hoặc dịch vụ đã ngừng áp dụng.
+            var dvHienTai = _repo.LayTatCa().FirstOrDefault(x =>
+                x.MaDV.Equals(dv.MaDV, StringComparison.OrdinalIgnoreCase) && x.DangApDung);
+            if (dvHienTai == null)
+            {
+                MessageBox.Show("Dịch vụ này đã ngừng áp dụng. Vui lòng chọn dịch vụ khác.", "Dịch vụ không còn hiệu lực",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TaiTab2();
+                return;
+            }
+
+            var datPhong = DuLieu.DocDatPhong().FirstOrDefault(x => x.Ma == luot.MaDatPhong);
+            if (datPhong == null || !DuLieu.LaTrangThaiDangLuuTru(datPhong.TrangThai))
+            {
+                MessageBox.Show("Lượt lưu trú không còn hoạt động. Vui lòng tải lại danh sách.", "Thông báo",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                TaiTab2();
+                return;
+            }
+            if (dtpNgayDung.Value.Date < datPhong.NgayDen.Date || dtpNgayDung.Value.Date > DateTime.Today)
+            {
+                MessageBox.Show("Ngày sử dụng dịch vụ phải nằm trong thời gian khách lưu trú và không được ở tương lai.",
+                    "Ngày sử dụng không hợp lệ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             var all = _ctRepo.LayTatCa();
             all.Add(new ChiTietDichVu
             {
                 MaCT = _ctRepo.SinhMaMoi(),
                 MaDatPhong = luot.MaDatPhong,
-                MaDV = dv.MaDV,
-                TenDV = dv.TenDV,
+                MaDV = dvHienTai.MaDV,
+                TenDV = dvHienTai.TenDV,
                 SoLuong = (int)numSoLuong.Value,
-                DonGiaLucDung = dv.DonGia,
+                DonGiaLucDung = dvHienTai.DonGia,
                 NgayDung = dtpNgayDung.Value
             });
             _ctRepo.LuuTatCa(all);
@@ -346,7 +351,9 @@ namespace QuanLyKhachSanMini.Forms
 
         private void DichVuForm_Load_1(object sender, EventArgs e)
         {
-
+            // Designer đang liên kết sự kiện Load tới handler này.
+            // Gọi luồng khởi tạo dữ liệu chính để tránh form mở ra nhưng trống.
+            DichVuForm_Load(sender, e);
         }
     }
 }

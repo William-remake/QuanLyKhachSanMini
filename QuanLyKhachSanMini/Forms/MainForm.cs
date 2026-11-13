@@ -1,4 +1,5 @@
-﻿using QuanLyKhachSanMini.Models;
+﻿using QuanLyKhachSanMini;
+using QuanLyKhachSanMini.Models;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -43,6 +44,7 @@ namespace QuanLyKhachSanMini.Forms
 
         private void TaiThongKe()
         {
+            DuLieu.DongBoTrangThaiPhong();
             lblTongPhong.Text = _hdService.TongSoPhong().ToString();
             lblPhongCoKhach.Text = _hdService.DemPhongCoKhach().ToString();
             lblLuotDangO.Text = _hdService.LayLuotDangO().Count.ToString();
