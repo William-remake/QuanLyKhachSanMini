@@ -27,6 +27,10 @@ namespace QuanLyKhachSanMini.Forms
             btnHuyDat.Click += BtnHuyDat_Click;
             btnLamMoi.Click += BtnLamMoi_Click;
             dgvPhongTrong.CellClick += DgvPhongTrong_CellClick;
+
+            // Báo giá tự cập nhật khi đổi ngày đến / ngày đi
+            dtpNgayDen.ValueChanged += (s, e) => CapNhatBaoGia();
+            dtpNgayDi.ValueChanged += (s, e) => CapNhatBaoGia();
         }
 
         private void DatPhongForm_Load(object? sender, EventArgs e)
@@ -117,6 +121,46 @@ namespace QuanLyKhachSanMini.Forms
         {
             soPhongChon = soPhong;
             lblPhongChon.Text = soPhong == "" ? "Chưa chọn phòng" : $"Phòng đã chọn: {soPhong}";
+            CapNhatBaoGia();
+        }
+
+        // ---------- Báo giá ----------
+
+        // Tính giá theo cùng quy tắc với hóa đơn: giá/đêm x số đêm (tối thiểu 1 đêm).
+        private bool TinhBaoGia(out decimal gia, out int soDem, out decimal tong)
+        {
+            gia = 0; soDem = 0; tong = 0;
+            if (soPhongChon == "") return false;
+
+            gia = DuLieu.LayGiaPhongTheoPhong(soPhongChon);
+            if (gia <= 0) return false;
+
+            soDem = Math.Max(1, (dtpNgayDi.Value.Date - dtpNgayDen.Value.Date).Days);
+            tong = gia * soDem;
+            return true;
+        }
+
+        private void CapNhatBaoGia()
+        {
+            if (soPhongChon == "")
+            {
+                lblGiaTienDatPhong.Text = "Chưa chọn phòng";
+                return;
+            }
+
+            if (dtpNgayDi.Value.Date <= dtpNgayDen.Value.Date)
+            {
+                lblGiaTienDatPhong.Text = "Ngày đi phải sau ngày đến";
+                return;
+            }
+
+            if (!TinhBaoGia(out decimal gia, out int soDem, out decimal tong))
+            {
+                lblGiaTienDatPhong.Text = "Không tìm thấy giá phòng";
+                return;
+            }
+
+            lblGiaTienDatPhong.Text = $"{gia:N0} đ/đêm x {soDem} đêm = {tong:N0} đ";
         }
 
         // ---------- Kiểm tra trùng lịch ----------
@@ -189,7 +233,7 @@ namespace QuanLyKhachSanMini.Forms
         {
             if (e.RowIndex < 0) return;
             string so = dgvPhongTrong.Rows[e.RowIndex].Cells["SoPhong"].Value?.ToString() ?? "";
-            CapNhatPhongChon(so);
+            CapNhatPhongChon(so);   // đã gồm cập nhật báo giá
         }
 
         private void BtnDatPhong_Click(object? sender, EventArgs e)
@@ -231,6 +275,10 @@ namespace QuanLyKhachSanMini.Forms
                 return;
             }
 
+            // Tổng tiền báo trước (cùng công thức với hóa đơn, chưa gồm dịch vụ và phụ thu).
+            int soDem = Math.Max(1, (di - den).Days);
+            decimal tongBaoGia = giaPhong * soDem;
+
             dsDat.Add(new DatPhong
             {
                 Ma = DuLieu.SinhMaDatPhong(),
@@ -243,11 +291,15 @@ namespace QuanLyKhachSanMini.Forms
             });
 
             DuLieu.GhiDatPhong(dsDat);
+            string phongVuaDat = soPhongChon;
             TaiDatPhong();
             dgvPhongTrong.DataSource = null;
             CapNhatPhongChon("");
-            MessageBox.Show("Đặt phòng thành công.", "Thông báo",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(
+                $"Đặt phòng {phongVuaDat} thành công.\n" +
+                $"Giá: {giaPhong:N0} đ/đêm x {soDem} đêm = {tongBaoGia:N0} đ\n" +
+                "(chưa gồm dịch vụ và phụ thu trả trễ)",
+                "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private DatPhong? LayDatDangChon()
@@ -316,8 +368,6 @@ namespace QuanLyKhachSanMini.Forms
             CapNhatPhongChon("");
         }
 
-
-
         private void dataGridView1_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
 
@@ -330,6 +380,11 @@ namespace QuanLyKhachSanMini.Forms
         private void btnNhanPhong_Click_1(object sender, EventArgs e)
         {
             BtnNhanPhong_Click(sender, e);
+        }
+
+        private void DatPhongForm_Load_1(object sender, EventArgs e)
+        {
+
         }
     }
 }

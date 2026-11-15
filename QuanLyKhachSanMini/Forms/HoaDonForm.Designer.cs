@@ -32,6 +32,7 @@
             groupBox1 = new GroupBox();
             dgvDangO = new DataGridView();
             grpTinhTien = new GroupBox();
+            btnXuatHoaDon = new Button();
             btnTraPhong = new Button();
             btnTinhTien = new Button();
             txtChiTiet = new TextBox();
@@ -87,6 +88,7 @@
             // 
             // grpTinhTien
             // 
+            grpTinhTien.Controls.Add(btnXuatHoaDon);
             grpTinhTien.Controls.Add(btnTraPhong);
             grpTinhTien.Controls.Add(btnTinhTien);
             grpTinhTien.Controls.Add(txtChiTiet);
@@ -100,16 +102,29 @@
             grpTinhTien.TabStop = false;
             grpTinhTien.Text = "Tính tiền và trả phòng";
             // 
+            // btnXuatHoaDon
+            // 
+            btnXuatHoaDon.BackColor = Color.FromArgb(192, 64, 0);
+            btnXuatHoaDon.Font = new Font("Segoe UI Semibold", 10.2F, FontStyle.Bold, GraphicsUnit.Point, 0);
+            btnXuatHoaDon.ForeColor = SystemColors.ControlLightLight;
+            btnXuatHoaDon.Location = new Point(230, 270);
+            btnXuatHoaDon.Name = "btnXuatHoaDon";
+            btnXuatHoaDon.Size = new Size(100, 41);
+            btnXuatHoaDon.TabIndex = 6;
+            btnXuatHoaDon.Text = "Xuất TXT";
+            btnXuatHoaDon.UseVisualStyleBackColor = false;
+            btnXuatHoaDon.Click += btnXuatHoaDon_Click;
+            // 
             // btnTraPhong
             // 
             btnTraPhong.BackColor = Color.Green;
             btnTraPhong.Font = new Font("Segoe UI Semibold", 10.2F, FontStyle.Bold, GraphicsUnit.Point, 0);
             btnTraPhong.ForeColor = SystemColors.ControlLightLight;
-            btnTraPhong.Location = new Point(172, 270);
+            btnTraPhong.Location = new Point(124, 270);
             btnTraPhong.Name = "btnTraPhong";
-            btnTraPhong.Size = new Size(200, 41);
+            btnTraPhong.Size = new Size(100, 41);
             btnTraPhong.TabIndex = 5;
-            btnTraPhong.Text = "Trả phòng && xuất TXT";
+            btnTraPhong.Text = "Trả phòng ";
             btnTraPhong.UseMnemonic = false;
             btnTraPhong.UseVisualStyleBackColor = false;
             btnTraPhong.Click += btnTraPhong_Click;
@@ -119,9 +134,9 @@
             btnTinhTien.BackColor = Color.FromArgb(0, 0, 192);
             btnTinhTien.Font = new Font("Segoe UI Semibold", 10.2F, FontStyle.Bold, GraphicsUnit.Point, 0);
             btnTinhTien.ForeColor = SystemColors.ControlLightLight;
-            btnTinhTien.Location = new Point(22, 270);
+            btnTinhTien.Location = new Point(18, 270);
             btnTinhTien.Name = "btnTinhTien";
-            btnTinhTien.Size = new Size(144, 41);
+            btnTinhTien.Size = new Size(100, 41);
             btnTinhTien.TabIndex = 4;
             btnTinhTien.Text = "Tính tiền";
             btnTinhTien.UseVisualStyleBackColor = false;
@@ -308,5 +323,6 @@
         private Label lblDoanhThu;
         private Label lblCongSuat;
         private DataGridView dgvHoaDon;
+        private Button btnXuatHoaDon;
     }
 }

@@ -185,11 +185,15 @@ namespace QuanLyKhachSanMini.Models
             return $"HD{max + 1:0000}";
         }
 
-        public HoaDon TraPhong(KetQuaTinhTien kq)
+        // Kiểm tra lượt đặt phòng này đã có hóa đơn chưa (tránh xuất trùng, doanh thu bị cộng 2 lần).
+        public bool DaCoHoaDon(string maDatPhong) =>
+            LayHoaDon().Any(h => h.MaDatPhong.Equals(maDatPhong, StringComparison.OrdinalIgnoreCase));
+
+        // CHỈ lập hóa đơn (tính vào doanh thu). KHÔNG đổi trạng thái đặt phòng / phòng.
+        public HoaDon LapHoaDon(KetQuaTinhTien kq)
         {
             ArgumentNullException.ThrowIfNull(kq);
 
-            // Mã được sinh từ dữ liệu hiện tại; trong giao dịch sẽ kiểm tra lại để tránh trùng.
             string maHD = SinhMaHD();
             string fileTxtTuongDoi = Path.Combine("HoaDon", maHD + ".txt");
             string fileTxtDayDu = DuLieu.LayDuongDanData(fileTxtTuongDoi);
@@ -202,24 +206,18 @@ namespace QuanLyKhachSanMini.Models
                 if (luotHienTai == null)
                     throw new InvalidOperationException("Lượt đặt phòng không còn ở trạng thái đang lưu trú. Vui lòng tải lại danh sách.");
 
-                var datPhong = DuLieu.DocDatPhong();
-                var booking = datPhong.FirstOrDefault(d =>
+                var booking = DuLieu.DocDatPhong().FirstOrDefault(d =>
                     d.Ma.Equals(luotHienTai.MaDatPhong, StringComparison.OrdinalIgnoreCase));
-                if (booking == null || !DuLieu.LaTrangThaiDangLuuTru(booking.TrangThai))
-                    throw new InvalidOperationException("Lượt đặt phòng đã thay đổi trạng thái. Vui lòng tải lại danh sách.");
+                if (booking == null)
+                    throw new InvalidOperationException("Không tìm thấy đặt phòng.");
 
-                if (DuLieu.DocDong("HoaDon.txt").Select(HoaDon.FromLine).Any(h =>
-                        h != null && h.MaDatPhong.Equals(booking.Ma, StringComparison.OrdinalIgnoreCase)))
+                var dsHoaDon = DuLieu.DocDong("HoaDon.txt").Select(HoaDon.FromLine).ToList();
+                if (dsHoaDon.Any(h => h != null && h.MaDatPhong.Equals(booking.Ma, StringComparison.OrdinalIgnoreCase)))
                     throw new InvalidOperationException("Đặt phòng này đã có hóa đơn, không thể lập trùng.");
+                if (dsHoaDon.Any(h => h != null && h.MaHD.Equals(maHD, StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidOperationException("Mã hóa đơn vừa được sử dụng ở phiên khác. Vui lòng thử lại.");
 
-                if (DuLieu.DocDong("HoaDon.txt").Select(HoaDon.FromLine).Any(h =>
-                        h != null && h.MaHD.Equals(maHD, StringComparison.OrdinalIgnoreCase)))
-                    throw new InvalidOperationException("Mã hóa đơn vừa được sử dụng ở phiên khác. Vui lòng thao tác trả phòng lại.");
-
-                if (!DuLieu.DocPhong().Any(p => p.SoPhong.Equals(booking.SoPhong, StringComparison.OrdinalIgnoreCase)))
-                    throw new InvalidOperationException($"Phòng {booking.SoPhong} không còn tồn tại trong Phong.txt.");
-
-                // Tính lại trong giao dịch để lấy đúng giá và dịch vụ mới nhất, không dùng bản xem trước cũ.
+                // Tính lại trong giao dịch để lấy đúng giá và dịch vụ mới nhất.
                 var ketQuaMoi = TinhTien(luotHienTai, kq.ThoiDiemTra);
                 var hd = new HoaDon
                 {
@@ -238,21 +236,42 @@ namespace QuanLyKhachSanMini.Models
                     NgayLap = DateTime.Now
                 };
 
-                var hoaDonLines = DuLieu.DocDong("HoaDon.txt");
-                hoaDonLines.Add(hd.ToLine());
-                DuLieu.GhiDong("HoaDon.txt", hoaDonLines);
+                var lines = DuLieu.DocDong("HoaDon.txt");
+                lines.Add(hd.ToLine());
+                DuLieu.GhiDong("HoaDon.txt", lines);
+
+                Directory.CreateDirectory(Path.GetDirectoryName(fileTxtDayDu)!);
+                File.WriteAllText(fileTxtDayDu, TaoNoiDung(ketQuaMoi, hd.MaHD), new UTF8Encoding(false));
+                hoaDonDaTao = hd;
+            }, "HoaDon.txt", fileTxtTuongDoi);
+
+            return hoaDonDaTao ?? throw new InvalidOperationException("Không tạo được hóa đơn.");
+        }
+
+        // CHỈ trả phòng (đổi trạng thái đặt phòng + phòng). KHÔNG tạo hóa đơn.
+        public void TraPhong(LuotO luot, DateTime thoiDiemTra)
+        {
+            ArgumentNullException.ThrowIfNull(luot);
+
+            DuLieu.ThucHienGiaoDich(() =>
+            {
+                var datPhong = DuLieu.DocDatPhong();
+                var booking = datPhong.FirstOrDefault(d =>
+                    d.Ma.Equals(luot.MaDatPhong, StringComparison.OrdinalIgnoreCase));
+                if (booking == null || !DuLieu.LaTrangThaiDangLuuTru(booking.TrangThai))
+                    throw new InvalidOperationException("Lượt đặt phòng không còn ở trạng thái đang lưu trú. Vui lòng tải lại danh sách.");
+
+                if (!DaCoHoaDon(booking.Ma))
+                    throw new InvalidOperationException("Hãy xuất hóa đơn trước khi trả phòng.");
+
+                if (!DuLieu.DocPhong().Any(p => p.SoPhong.Equals(booking.SoPhong, StringComparison.OrdinalIgnoreCase)))
+                    throw new InvalidOperationException($"Phòng {booking.SoPhong} không còn tồn tại trong Phong.txt.");
 
                 booking.TrangThai = TrangThaiDaTra;
                 DuLieu.GhiDatPhong(datPhong);
                 if (!DuLieu.CapNhatTrangThaiPhong(booking.SoPhong, PhongDangDon))
                     throw new InvalidOperationException($"Không cập nhật được trạng thái phòng {booking.SoPhong}.");
-
-                Directory.CreateDirectory(Path.GetDirectoryName(fileTxtDayDu)!);
-                File.WriteAllText(fileTxtDayDu, TaoNoiDung(ketQuaMoi, hd.MaHD), new UTF8Encoding(false));
-                hoaDonDaTao = hd;
-            }, "HoaDon.txt", "DatPhong.txt", "Phong.txt", fileTxtTuongDoi);
-
-            return hoaDonDaTao ?? throw new InvalidOperationException("Không tạo được hóa đơn.");
+            }, "DatPhong.txt", "Phong.txt");
         }
 
         public List<HoaDon> LayHoaDon() => DuLieu.DocDong("HoaDon.txt")
@@ -272,10 +291,13 @@ namespace QuanLyKhachSanMini.Models
             foreach (var h in hoaDon)
                 demPhongDem += DemDemTrongThang(h.NgayDen.Date, h.NgayDen.Date.AddDays(h.SoDem), thang, nam);
 
-            // Bổ sung số đêm đã sử dụng của khách hiện vẫn đang lưu trú trong tháng hiện tại.
+            // Bổ sung số đêm đã sử dụng của khách đang lưu trú mà CHƯA có hóa đơn (tránh đếm trùng).
+            var maDaCoHoaDon = hoaDon.Select(h => h.MaDatPhong)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
             DateTime ngayKetThuc = DateTime.Today;
             foreach (var luot in LayLuotDangO())
             {
+                if (maDaCoHoaDon.Contains(luot.MaDatPhong)) continue;
                 DateTime ketThuc = luot.NgayDiDuKien.Date < ngayKetThuc
                     ? luot.NgayDiDuKien.Date : ngayKetThuc;
                 if (ketThuc > luot.NgayDen.Date)

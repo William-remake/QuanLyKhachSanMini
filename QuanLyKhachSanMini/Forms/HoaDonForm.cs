@@ -21,6 +21,7 @@ namespace QuanLyKhachSanMini.Forms
             InitializeComponent();
         }
 
+        // Giữ lại vì Designer có thể đang gán event này.
         private void lblGhiChuPhuThu_Click(object sender, EventArgs e)
         {
 
@@ -46,7 +47,7 @@ namespace QuanLyKhachSanMini.Forms
             if (dgvHoaDon.Columns.Count == 0)
             {
                 dgvHoaDon.RowHeadersVisible = false;
-                dgvHoaDon.Columns.Add("colHD", "Mã hóa");
+                dgvHoaDon.Columns.Add("colHD", "Mã hóa đơn");
                 dgvHoaDon.Columns.Add("colKhachHD", "Khách");
                 dgvHoaDon.Columns.Add("colPhongHD", "Phòng");
                 dgvHoaDon.Columns.Add("colNgayLap", "Ngày lập");
@@ -86,6 +87,7 @@ namespace QuanLyKhachSanMini.Forms
 
         private LuotO? LuotDangChon() => dgvDangO.CurrentRow?.Tag as LuotO;
 
+        // ===================== TÍNH TIỀN (chỉ xem trước) =====================
         private void btnTinhTien_Click(object sender, EventArgs e)
         {
             var luot = LuotDangChon();
@@ -107,7 +109,8 @@ namespace QuanLyKhachSanMini.Forms
             }
         }
 
-        private void btnTraPhong_Click(object sender, EventArgs e)
+        // ===================== XUẤT HÓA ĐƠN (tính vào doanh thu, KHÔNG trả phòng) =====================
+        private void btnXuatHoaDon_Click(object sender, EventArgs e)
         {
             var luot = LuotDangChon();
             if (luot == null)
@@ -119,17 +122,23 @@ namespace QuanLyKhachSanMini.Forms
 
             try
             {
+                if (_sv.DaCoHoaDon(luot.MaDatPhong))
+                {
+                    MessageBox.Show("Lượt ở này đã được xuất hóa đơn rồi.", "Đã có hóa đơn",
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
                 // Luôn tính lại ngay trước khi lưu để lấy giá phòng và dịch vụ mới nhất.
                 _ketQua = _sv.TinhTien(luot, dtpThoiDiemTra.Value);
-                string noiDungTam = _sv.TaoNoiDung(_ketQua);
-                txtChiTiet.Text = noiDungTam;
+                txtChiTiet.Text = _sv.TaoNoiDung(_ketQua);
 
                 var xacNhan = MessageBox.Show(
-                    $"Trả phòng {luot.MaPhong} cho {luot.TenKhach}?\nTổng thanh toán: {_ketQua.Tong:N0} đ",
-                    "Xác nhận trả phòng", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    $"Xuất hóa đơn cho {luot.TenKhach} - phòng {luot.MaPhong}?\nTổng thanh toán: {_ketQua.Tong:N0} đ",
+                    "Xác nhận xuất hóa đơn", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                 if (xacNhan != DialogResult.Yes) return;
 
-                var hd = _sv.TraPhong(_ketQua);
+                var hd = _sv.LapHoaDon(_ketQua);   // lưu hóa đơn -> tính vào doanh thu
                 string noiDung = _sv.TaoNoiDung(hd);
                 txtChiTiet.Text = noiDung;
 
@@ -141,7 +150,8 @@ namespace QuanLyKhachSanMini.Forms
                     Title = "Xuất hóa đơn TXT",
                     InitialDirectory = Path.GetDirectoryName(fileMacDinh)
                 };
-                string thongBao = $"Đã trả phòng. Hóa đơn đã được lưu tại: {fileMacDinh}";
+
+                string thongBao = $"Đã xuất hóa đơn. File được lưu tại: {fileMacDinh}";
                 if (dlg.ShowDialog() == DialogResult.OK)
                 {
                     try
@@ -149,29 +159,67 @@ namespace QuanLyKhachSanMini.Forms
                         string fileChon = Path.GetFullPath(dlg.FileName);
                         if (!fileChon.Equals(Path.GetFullPath(fileMacDinh), StringComparison.OrdinalIgnoreCase))
                             File.WriteAllText(fileChon, noiDung, new UTF8Encoding(false));
-                        thongBao = $"Đã trả phòng và xuất hóa đơn: {fileChon}";
+                        thongBao = $"Đã xuất hóa đơn: {fileChon}";
                     }
                     catch (Exception exXuat)
                     {
-                        // Trả phòng và hóa đơn gốc đã được lưu; lỗi bản sao không được báo nhầm là lỗi trả phòng.
-                        MessageBox.Show($"Đã trả phòng và lưu hóa đơn gốc tại {fileMacDinh}, nhưng không thể xuất bản sao.\n{exXuat.Message}",
+                        // Hóa đơn gốc đã được lưu; lỗi bản sao không được báo nhầm là lỗi lập hóa đơn.
+                        MessageBox.Show($"Hóa đơn gốc đã lưu tại {fileMacDinh}, nhưng không thể xuất bản sao.\n{exXuat.Message}",
                             "Không thể xuất bản sao", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     }
                 }
 
                 MessageBox.Show(thongBao, "Thành công", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                TaiDanhSachDangO();
+                XemThongKe();   // cập nhật doanh thu ngay; khách vẫn còn trong danh sách đang ở
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Không thể xuất hóa đơn", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 XemThongKe();
+            }
+        }
+
+        // ===================== TRẢ PHÒNG (chỉ đổi trạng thái, KHÔNG lập hóa đơn) =====================
+        private void btnTraPhong_Click(object sender, EventArgs e)
+        {
+            var luot = LuotDangChon();
+            if (luot == null)
+            {
+                MessageBox.Show("Hãy chọn một khách đang lưu trú.", "Chưa chọn",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (!_sv.DaCoHoaDon(luot.MaDatPhong))
+            {
+                MessageBox.Show("Khách này chưa được xuất hóa đơn. Hãy bấm \"Xuất hóa đơn\" trước khi trả phòng.",
+                    "Chưa xuất hóa đơn", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (MessageBox.Show($"Trả phòng {luot.MaPhong} cho {luot.TenKhach}?", "Xác nhận trả phòng",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+
+            try
+            {
+                _sv.TraPhong(luot, dtpThoiDiemTra.Value);
+                MessageBox.Show("Đã trả phòng.", "Thành công", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                txtChiTiet.Clear();
             }
             catch (Exception ex)
             {
                 MessageBox.Show(ex.Message, "Không thể trả phòng", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
                 TaiDanhSachDangO();
                 XemThongKe();
             }
         }
 
+        // ===================== THỐNG KÊ =====================
         private void btnXemThongKe_Click(object sender, EventArgs e) => XemThongKe();
+
         private void XemThongKe()
         {
             var tk = _sv.ThongKe(dtpThang.Value.Month, dtpThang.Value.Year);
