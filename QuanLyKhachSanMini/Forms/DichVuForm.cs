@@ -11,7 +11,6 @@ using System.Windows.Forms;
 
 namespace QuanLyKhachSanMini.Forms
 {
-
     public partial class DichVuForm : Form
     {
         private readonly DichVuRepository _repo = new();
@@ -24,6 +23,12 @@ namespace QuanLyKhachSanMini.Forms
         {
             InitializeComponent();
             dgvDichVu.CellClick += dgvDichVu_CellClick;
+
+            // Gắn sự kiện chuẩn cho các nút bấm để tránh bị lỗi bấm không ăn
+            btnThem.Click += btnThem_Click;
+            btnCapNhat.Click += btnCapNhat_Click;
+            btnNgungKich.Click += btnNgungKich_Click;
+            btnLamMoi.Click += btnLamMoi_Click;
         }
 
         private void DichVuForm_Load(object sender, EventArgs e)
@@ -116,6 +121,7 @@ namespace QuanLyKhachSanMini.Forms
             _repo.LuuTatCa(_ds);
             TaiDuLieu();
             LamMoiForm();
+            MessageBox.Show("Thêm dịch vụ thành công!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void btnCapNhat_Click(object sender, EventArgs e)
@@ -142,6 +148,7 @@ namespace QuanLyKhachSanMini.Forms
             _repo.LuuTatCa(_ds);
             TaiDuLieu();
             LamMoiForm();
+            MessageBox.Show("Cập nhật dịch vụ thành công!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void btnNgungKich_Click(object sender, EventArgs e)
@@ -152,10 +159,29 @@ namespace QuanLyKhachSanMini.Forms
                 MessageBox.Show("Hãy chọn một dịch vụ trong bảng.", "Chưa chọn", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
-            dv.DangApDung = !dv.DangApDung;   // không xóa cứng, chỉ đổi cờ
+            dv.DangApDung = !dv.DangApDung;   // Đổi trạng thái áp dụng
             _repo.LuuTatCa(_ds);
             TaiDuLieu();
             LamMoiForm();
+        }
+
+        private void btnXoa_Click(object sender, EventArgs e)
+        {
+            var dv = _ds.FirstOrDefault(d => d.MaDV == txtMaDV.Text);
+            if (dv == null)
+            {
+                MessageBox.Show("Hãy chọn một dịch vụ trong bảng để xóa.", "Chưa chọn", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (MessageBox.Show($"Bạn có chắc muốn xóa dịch vụ [{dv.TenDV}]?", "Xác nhận xóa", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+            {
+                _ds.Remove(dv);
+                _repo.LuuTatCa(_ds);
+                TaiDuLieu();
+                LamMoiForm();
+                MessageBox.Show("Đã xóa dịch vụ thành công!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
         }
 
         private void btnLamMoi_Click(object sender, EventArgs e)
@@ -289,7 +315,6 @@ namespace QuanLyKhachSanMini.Forms
                 return;
             }
 
-            // Đọc lại dịch vụ để tránh ghi theo giá cũ hoặc dịch vụ đã ngừng áp dụng.
             var dvHienTai = _repo.LayTatCa().FirstOrDefault(x =>
                 x.MaDV.Equals(dv.MaDV, StringComparison.OrdinalIgnoreCase) && x.DangApDung);
             if (dvHienTai == null)
@@ -330,6 +355,7 @@ namespace QuanLyKhachSanMini.Forms
 
             numSoLuong.Value = 1;
             TaiLuoiDaDung();
+            MessageBox.Show("Ghi nhận dịch vụ thành công!", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void btnXoaDong_Click(object sender, EventArgs e)
@@ -351,8 +377,6 @@ namespace QuanLyKhachSanMini.Forms
 
         private void DichVuForm_Load_1(object sender, EventArgs e)
         {
-            // Designer đang liên kết sự kiện Load tới handler này.
-            // Gọi luồng khởi tạo dữ liệu chính để tránh form mở ra nhưng trống.
             DichVuForm_Load(sender, e);
         }
     }

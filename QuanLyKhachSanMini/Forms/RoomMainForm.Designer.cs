@@ -55,12 +55,9 @@
             pnlRoomView = new Panel();
             lvSoDo = new ListView();
             imageList1 = new ImageList(components);
-            ssTrangThai = new StatusStrip();
-            toolStripStatusLabel1 = new ToolStripStatusLabel();
             mnsRoom.SuspendLayout();
             pnlListView.SuspendLayout();
             pnlRoomView.SuspendLayout();
-            ssTrangThai.SuspendLayout();
             SuspendLayout();
             // 
             // mnsRoom
@@ -83,33 +80,33 @@
             // thêmPhòngToolStripMenuItem
             // 
             thêmPhòngToolStripMenuItem.Name = "thêmPhòngToolStripMenuItem";
-            thêmPhòngToolStripMenuItem.Size = new Size(270, 34);
+            thêmPhòngToolStripMenuItem.Size = new Size(215, 34);
             thêmPhòngToolStripMenuItem.Text = "Thêm Phòng";
             thêmPhòngToolStripMenuItem.Click += thêmPhòngToolStripMenuItem_Click;
             // 
             // sửaPhòngToolStripMenuItem
             // 
             sửaPhòngToolStripMenuItem.Name = "sửaPhòngToolStripMenuItem";
-            sửaPhòngToolStripMenuItem.Size = new Size(270, 34);
+            sửaPhòngToolStripMenuItem.Size = new Size(215, 34);
             sửaPhòngToolStripMenuItem.Text = "Sửa Phòng";
             sửaPhòngToolStripMenuItem.Click += sửaPhòngToolStripMenuItem_Click;
             // 
             // xóaPhòngToolStripMenuItem
             // 
             xóaPhòngToolStripMenuItem.Name = "xóaPhòngToolStripMenuItem";
-            xóaPhòngToolStripMenuItem.Size = new Size(270, 34);
+            xóaPhòngToolStripMenuItem.Size = new Size(215, 34);
             xóaPhòngToolStripMenuItem.Text = "Xóa Phòng";
             xóaPhòngToolStripMenuItem.Click += xóaPhòngToolStripMenuItem_Click;
             // 
             // toolStripSeparator1
             // 
             toolStripSeparator1.Name = "toolStripSeparator1";
-            toolStripSeparator1.Size = new Size(267, 6);
+            toolStripSeparator1.Size = new Size(212, 6);
             // 
             // thoátToolStripMenuItem
             // 
             thoátToolStripMenuItem.Name = "thoátToolStripMenuItem";
-            thoátToolStripMenuItem.Size = new Size(270, 34);
+            thoátToolStripMenuItem.Size = new Size(215, 34);
             thoátToolStripMenuItem.Text = "Thoát";
             thoátToolStripMenuItem.Click += thoátToolStripMenuItem_Click;
             // 
@@ -199,28 +196,11 @@
             imageList1.Images.SetKeyName(1, "Index 1");
             imageList1.Images.SetKeyName(2, "Index 2");
             // 
-            // ssTrangThai
-            // 
-            ssTrangThai.ImageScalingSize = new Size(24, 24);
-            ssTrangThai.Items.AddRange(new ToolStripItem[] { toolStripStatusLabel1 });
-            ssTrangThai.Location = new Point(0, 697);
-            ssTrangThai.Name = "ssTrangThai";
-            ssTrangThai.Size = new Size(1258, 32);
-            ssTrangThai.TabIndex = 3;
-            ssTrangThai.Text = "statusStrip1";
-            // 
-            // toolStripStatusLabel1
-            // 
-            toolStripStatusLabel1.Name = "toolStripStatusLabel1";
-            toolStripStatusLabel1.Size = new Size(179, 25);
-            toolStripStatusLabel1.Text = "toolStripStatusLabel1";
-            // 
             // frmRoomMain
             // 
             AutoScaleDimensions = new SizeF(10F, 25F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(1258, 729);
-            Controls.Add(ssTrangThai);
             Controls.Add(pnlRoomView);
             Controls.Add(pnlListView);
             Controls.Add(mnsRoom);
@@ -234,8 +214,6 @@
             mnsRoom.PerformLayout();
             pnlListView.ResumeLayout(false);
             pnlRoomView.ResumeLayout(false);
-            ssTrangThai.ResumeLayout(false);
-            ssTrangThai.PerformLayout();
             ResumeLayout(false);
             PerformLayout();
         }
@@ -256,7 +234,5 @@
         private ListView lvSoDo;
         private ImageList imageList1;
         private ToolStripMenuItem cácLoạiPhòngToolStripMenuItem;
-        private StatusStrip ssTrangThai;
-        private ToolStripStatusLabel toolStripStatusLabel1;
     }
 }
